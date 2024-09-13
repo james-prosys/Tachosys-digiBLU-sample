@@ -295,7 +295,7 @@ namespace digiDownloadPC
                 return;
             }
 
-            int packetLength = Protocol.PacketBytePosition.Data + ByteArray.ToInt16(received, Protocol.PacketBytePosition.Length) + 1;
+            int packetLength = Protocol.PacketBytePosition.Data + ByteArray.ToUInt16(received, Protocol.PacketBytePosition.Length) + 1;
             while (true) {
                 if (InBuffer.TryDequeue(out byte buffer)) {
                     received[insertPos] = buffer;

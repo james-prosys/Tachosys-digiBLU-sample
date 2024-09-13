@@ -35,17 +35,10 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Xml" />
-    <Reference Include="Tachosys.Files, Version=1.39.8620.19433, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\Tachosys.Files\Tachosys.Files\bin\Release\Tachosys.Files.dll</HintPath>
-    </Reference>
-    <Reference Include="Tachosys.System, Version=1.16.8627.27011, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>\\borg\src\digiConnect\Tachosys.System\V0116\bin\Release\Tachosys.System.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Connection\BluetoothLEConnection.cs" />
@@ -70,6 +63,8 @@
     <Compile Include="Protocol\Protocol.cs" />
     <Compile Include="Protocol\ReadDataIdentifier.cs" />
     <Compile Include="Protocol\VehicleUnitProtocol.cs" />
+    <Compile Include="System\ByteArray.cs" />
+    <Compile Include="System\TimeReal.cs" />
     <Compile Include="WinAPI\DeviceManagement.cs" />
     <EmbeddedResource Include="Properties\NationCodes.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -93,7 +88,5 @@
       <Version>10.0.18362.2005</Version>
     </PackageReference>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Utilities\" />
-  </ItemGroup>
+  <ItemGroup />
 </Project>

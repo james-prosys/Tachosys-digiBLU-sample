@@ -2,15 +2,12 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using ProSys.Utilities;
-using Tachosys.Files;
 using Tachosys.System;
-using Windows.Devices.Bluetooth;
-using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Devices.Enumeration;
 
 namespace digiDownloadPC
@@ -34,7 +31,9 @@ namespace digiDownloadPC
 
         static byte[] TREPS;
         static byte slotNumber;
-        static byte activities;
+
+        static TimeReal activityStartDate;
+        static TimeReal activityEndDate;
 
         enum TachographManufacturer
         {
@@ -53,13 +52,6 @@ namespace digiDownloadPC
             WorkshopCard,
             ControlCard,
             CompanyCard
-        }
-
-        enum Activities
-        {
-            None,
-            All,
-            SinceLast
         }
 
         static async Task Main(string[] args)
@@ -122,21 +114,6 @@ namespace digiDownloadPC
             await GetStaticKLine();
 
             await PollKLine();
-
-            // F9D7 - Get Vehicle Position
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("Get Vehicle Position");
-            byte[] data = await connection.ExecuteVUCommand(VehicleUnitProtocol.ReadDataByIdentifier(new byte[] { 0xf9, 0xd7 }), true);
-            if (data.Length > 0) {
-                Console.ForegroundColor = ConsoleColor.Green;
-
-                var timestamp = ByteArray.Subbyte(data, 3, 4).ToArray();
-                var geoCoords = ByteArray.Subbyte(data, 8, 6).ToArray();
-
-                byte nation = data[15];
-
-                Console.WriteLine($"Vehicle Position at : {ByteArray.ToTimeReal(timestamp, 0).ToString("G")} - {ByteArray.ToGeoCoordinates(geoCoords, 0)} in {NationCodes.ToNationDescription(nation)}");
-            }
 
             // Close K-Line
             Console.ForegroundColor = ConsoleColor.Green;
@@ -216,33 +193,23 @@ namespace digiDownloadPC
                     t.Add(0x01);
 
                     Console.Write("Download Activities:      ");
-                    if (Console.ReadKey().Key == ConsoleKey.Y) t.Add(0x02);
-                    Console.WriteLine();
+                    if (Console.ReadKey().Key == ConsoleKey.Y) {
+                        t.Add(0x02);
+                        Console.WriteLine();
 
-                    Console.Write("Activity range: Press A for all, Press L for last days, Press S for since last download ");
-                    switch (Console.ReadKey().Key) {
-                        case ConsoleKey.A: activities = (byte)Activities.All; break;
-                        case ConsoleKey.S: activities = (byte)Activities.SinceLast; break;
-                        case ConsoleKey.L:
-                            Console.WriteLine();
-                            Console.WriteLine("Enter number of days of activity to download");
-                            byte range = (byte)Activities.None;
-                            while (true) {
-                                var info = Console.ReadKey();
-                                if (info.Key == ConsoleKey.Enter) {
-                                    activities = range;
-                                    break;
-                                }
-                                else {
-                                    var c = info.KeyChar;
-                                    if (Char.IsNumber(c)) {
-                                        range *= 10;
-                                        range += Convert.ToByte(c.ToString());
-                                    }
-                                }
-                            }
-                            break;
-                        default: activities = (byte)Activities.None; break;
+                        string s;
+                        DateTime startDate, endDate;
+                        do {
+                            Console.WriteLine("Enter activity range start date:");
+                            s = Console.ReadLine();
+                        } while (!DateTime.TryParse(s, out startDate));
+                        do {
+                            Console.WriteLine("Enter activity range end date:");
+                            s = Console.ReadLine();
+                        } while (!DateTime.TryParse(s, out endDate));
+
+                        activityStartDate = (TimeReal)startDate;
+                        activityEndDate = (TimeReal)endDate;
                     }
                     Console.WriteLine();
 
@@ -424,8 +391,7 @@ namespace digiDownloadPC
             string VIN = ByteArray.ToIA5String(data, 3, 17).Trim();
             // F97D - Get Registering Member State
             data = await connection.ExecuteVUCommand(VehicleUnitProtocol.ReadDataByIdentifier(ReadDataIdentifier.RegisteringMemberState));
-            var enc = TachographEncoding.GetEncoding(1);
-            string rms = enc.GetString(ByteArray.Subbyte(data, 3, 3)).Trim();
+            string rms = Encoding.GetEncoding("iso-8859-1").GetString(ByteArray.Subbyte(data, 3, 3)).Trim();
             // F97E - Get Vehicle Registration
             data = await connection.ExecuteVUCommand(VehicleUnitProtocol.ReadDataByIdentifier(ReadDataIdentifier.VehicleRegistration));
             string VRN = ByteArray.ToString(data, 3, 14).Trim();
@@ -555,8 +521,8 @@ namespace digiDownloadPC
 
             byte[] data = await DownloadTreps();
 
-            var tachoFile = new TachographFile(data);
-            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), tachoFile.GetFileName(DateTime.Now, 0));
+            string filename = "New download.ddd";
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), filename);
 
             using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read)) {
                 var b = new BinaryWriter(fs);
@@ -689,7 +655,7 @@ namespace digiDownloadPC
 
             foreach (var trep in TREPS) {
                 if (trep == 0x02 || trep == 0x22 || trep == 0x32) {
-                    CalculateDateRange(received.ToBytes(), out TimeReal activityStartDate, out TimeReal activityEndDate);
+                    
 
                     var buffer = new byte[] { };
                     var data = new byte[] { };
@@ -794,51 +760,6 @@ namespace digiDownloadPC
                         case 0x5: TREPS[i] = 0x35; break;
                     }
                 }
-            }
-        }
-
-        private static void CalculateDateRange(byte[] data, out TimeReal activityStartDate, out TimeReal activityEndDate)
-        {
-            var tachoFile = new TachographFile(data);
-            var vehicleUnit = tachoFile.VehicleUnit;
-
-            VUDownloadablePeriod downloadablePeriod = (VUDownloadablePeriod)vehicleUnit.GetDataModel("7631", RecordType.VuDownloadablePeriod, 0);
-            if (downloadablePeriod == null)
-                downloadablePeriod = (VUDownloadablePeriod)vehicleUnit.GetDataModel("7621", RecordType.VuDownloadablePeriod, 0);
-            if (downloadablePeriod == null)
-                downloadablePeriod = (VUDownloadablePeriod)vehicleUnit.GetDataModel("7601", "VuDownloadablePeriod", 0);
-
-            if (downloadablePeriod == null)
-                throw new TachographException("Unable to calculate activity download period");
-
-            switch (activities) {
-                case (byte)Activities.All:
-                    activityStartDate = downloadablePeriod.minDownloadableTime;
-                    activityEndDate = downloadablePeriod.maxDownloadableTime;
-                    return;
-                case (byte)Activities.SinceLast:
-                    TimeReal downloadingTime;
-                    VUDownloadActivityData_G2 downloadActivityData_G2 = (VUDownloadActivityData_G2)vehicleUnit.GetDataModel("7631", RecordType.VuDownloadActivityData, 0);
-                    if (downloadActivityData_G2 == null)
-                        downloadActivityData_G2 = (VUDownloadActivityData_G2)vehicleUnit.GetDataModel("7621", RecordType.VuDownloadActivityData, 0);
-                    if (downloadActivityData_G2 != null)
-                        downloadingTime = downloadActivityData_G2.downloadingTime;
-                    else {
-                        VUDownloadActivityData_G1 downloadActivityData_G1 = (VUDownloadActivityData_G1)vehicleUnit.GetDataModel("7601", "VuDownloadActivityData", 0);
-                        if (downloadActivityData_G1 != null)
-                            downloadingTime = downloadActivityData_G1.downloadingTime;
-                        else
-                            throw new TachographException("Unable to calculate activity download period");
-                    }
-                    activityStartDate = downloadingTime.Date;
-                    activityEndDate = downloadablePeriod.maxDownloadableTime;
-                    return;
-                default:
-                    activityStartDate = downloadablePeriod.minDownloadableTime;
-                    activityEndDate = downloadablePeriod.maxDownloadableTime;
-
-                    activityStartDate = TimeReal.Last(activityStartDate, activityEndDate.AddDays(-activities));
-                    return;
             }
         }
 

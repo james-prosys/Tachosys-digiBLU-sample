@@ -94,7 +94,7 @@ namespace digiDownloadPC
                 default:
                     throw new CommandReplyNotRecognisedException();
             }
-            int length = ByteArray.ToInt16(received, Protocol.PacketBytePosition.Length);
+            int length = ByteArray.ToUInt16(received, Protocol.PacketBytePosition.Length);
             if (length > 0) {
                 Array.Copy(received, Protocol.PacketBytePosition.Data, received, 0, length);
                 Array.Resize(ref received, length);
