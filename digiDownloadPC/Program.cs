@@ -531,7 +531,7 @@ namespace digiDownloadPC
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("Request Transfer Exit");
-            await connection.Send(VehicleUnitProtocol.RequestTransferExit());
+            await connection.ExecuteVUCommand(VehicleUnitProtocol.RequestTransferExit());
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("Stop Communications");
